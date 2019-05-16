@@ -1,0 +1,9 @@
+drop table if exists spring
+
+create table if not exists spring(
+  id int AUTO_INCREMENT,
+  title varchar(10) not null ,
+  author varchar(10),
+  create_time data ,
+  primary key ("id")
+)ENGINE=InooDB DEFAULT CHARSET=utf8;
