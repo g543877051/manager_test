@@ -2,11 +2,12 @@ package com.gz.manager.controller;
 
 import com.gz.manager.kafka.KafkaComsumerHelper;
 import com.gz.manager.kafka.KafkaProducerHelper;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Field;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,14 +16,13 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/v1.0")
 public class HttpRequestController {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpServletRequest.class);
+
 
     @Autowired
     private KafkaProducerHelper kafkaProducerHelper;
@@ -81,4 +81,84 @@ public class HttpRequestController {
 
         return "comsumer finished, count: " + updatedCount;
     }
+
+    @RequestMapping("/concumser_test")
+    public String consumer_test(HttpServletRequest request){
+        KafkaConsumer<String, String> consumer = kafkaComsumerHelper.getKafkaConsumer();
+
+        //订阅主题为test
+        consumer.subscribe(Collections.singletonList("test"));
+
+        try {
+            while (true){
+                ConsumerRecords<String, String> records = consumer.poll(100);
+                for (ConsumerRecord<String, String> record : records){
+                    LOGGER.info("topic = {}, partition = {}, offset = {}, consumer = {}, value = {}", record.topic(),
+                            record.partition(), record.offset(), record.key(), record.value());
+                }
+
+               /* try {
+                    //同步提交，在broker对提交请求作出回应之前，应用程序会一直堵塞
+                    consumer.commitSync();
+                }catch (CommitFailedException e){
+                    LOGGER.error("commit error");
+                }*/
+
+               consumer.commitAsync();
+            }
+        }
+        finally {
+            try {
+                consumer.commitSync();
+            }finally {
+                consumer.close();
+            }
+        }
+    }
+
+    @RequestMapping("/concumser_test1")
+    public String consumer_test1(HttpServletRequest request){
+        KafkaConsumer<String, String> consumer = kafkaComsumerHelper.getKafkaConsumer();
+
+        List<PartitionInfo> partitionInfos = null;
+
+        partitionInfos = consumer.partitionsFor("topic");
+
+        List<TopicPartition> list = new ArrayList<TopicPartition>();
+
+        if (partitionInfos != null){
+            for (PartitionInfo partitionInfo : partitionInfos){
+                list.add(new TopicPartition(partitionInfo.topic(), partitionInfo.partition()));
+
+                consumer.assign(list);
+            }
+
+            while (true){
+                ConsumerRecords<String, String> records = consumer.poll(100);
+            }
+        }
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> currentOffset = new HashMap<TopicPartition, OffsetAndMetadata>();
+
+    KafkaConsumer<String, String> consumer = kafkaComsumerHelper.getKafkaConsumer();
+
+    private class HandleRebalance implements ConsumerRebalanceListener{
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            System.out.println("Lost partitions in rebalance, commiting current offset : " + currentOffset);
+
+            consumer.commitSync(currentOffset);
+
+            consumer.subscribe(Collections.singleton("test"), new HandleRebalance());
+        }
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+
+        }
+    }
 }
+
+

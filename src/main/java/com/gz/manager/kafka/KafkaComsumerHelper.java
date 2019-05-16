@@ -20,9 +20,11 @@ public class KafkaComsumerHelper {
     public KafkaComsumerHelper(){
         Properties properties = new Properties();
         properties.put("bootstrap.servers", "127.0.0.1:9092");
+        //消费者群组id
         properties.put("group.id", "gzTEST");
         properties.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         properties.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        //properties.put("enable.auto.commit", "true");
 
         kafkaConsumer = new KafkaConsumer<String, String>(properties);
     }
